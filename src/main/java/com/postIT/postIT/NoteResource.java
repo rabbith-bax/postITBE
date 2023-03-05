@@ -4,6 +4,7 @@ import com.postIT.postIT.model.Note;
 import com.postIT.postIT.service.NoteService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -36,6 +37,7 @@ public class NoteResource {
     }
 
     @DeleteMapping("/delete/{id}")
+    @Transactional
     public ResponseEntity<?> deleteNote(@PathVariable("id") Long id) {
         noteService.deleteNoteById(id);
         return new ResponseEntity<>(HttpStatus.OK);
