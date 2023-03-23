@@ -16,15 +16,14 @@ import java.util.List;
 
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertNotNull;
 
 @SpringBootTest
 public class NoteResourceTest {
-    @Mock
-    private NoteService noteService;
-
     @InjectMocks
     private NoteResource noteResource;
+
+    @Mock
+    private NoteService noteService;
 
     @BeforeClass
     public void setUp() {
@@ -40,17 +39,8 @@ public class NoteResourceTest {
         when(noteService.findAllNotes()).thenReturn(notes);
 
         ResponseEntity<List<Note>> responseEntity = noteResource.getAllNotes();
-        assertNotNull(responseEntity);
         assertEquals(responseEntity.getStatusCode(), HttpStatus.OK);
-
-        List<Note> responseNotes = responseEntity.getBody();
-        assertNotNull(responseNotes);
-        assertEquals(responseNotes.size(), notes.size());
-
-        for (int i = 0; i < responseNotes.size(); i++) {
-            assertEquals(responseNotes.get(i).getId(), notes.get(i).getId());
-            assertEquals(responseNotes.get(i).getContent(), notes.get(i).getContent());
-        }
+        assertEquals(responseEntity.getBody(), notes);
     }
 
     @Test
@@ -61,12 +51,32 @@ public class NoteResourceTest {
         when(noteService.addNote(note)).thenReturn(note);
 
         ResponseEntity<Note> responseEntity = noteResource.addNote(note);
-        assertNotNull(responseEntity);
         assertEquals(responseEntity.getStatusCode(), HttpStatus.CREATED);
+        assertEquals(responseEntity.getBody().getContent(), note.getContent());
+    }
 
-        Note responseNote = responseEntity.getBody();
-        assertNotNull(responseNote);
-        assertEquals(responseNote.getContent(), note.getContent());
+    @Test(expectedExceptions = NoteResource.NoteContentExceedsSizeLimitException.class)
+    public void testAddNoteWithExceededContentLength() {
+        Note note = new Note();
+        note.setContent("Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Aenean commodo ligula eget dolor. " +
+                "Aenean massa. Cum sociis natoque penatibus et magnis dis parturient montes, nascetur ridiculus mus. " +
+                "Donec quam felis, ultricies nec, pellentesque eu, pretium quis, sem. Nulla consequat massa quis " +
+                "enim. Donec pede justo, fringilla vel, aliquet nec, vulputate eget, arcu. In enim justo, rhoncus ut, " +
+                "imperdiet a, venenatis vitae, justo. Nullam dictum felis eu pede mollis pretium. Integer tincidunt. " +
+                "Cras dapibus. Vivamus elementum semper nisi. Aenean vulputate eleife");
+
+        noteResource.addNote(note);
+    }
+
+    @Test
+    public void testHandleNoteContentExceedsSizeLimitException() {
+        String errorMessage = "Size of note content cannot exceed 200 characters";
+        NoteResource.NoteContentExceedsSizeLimitException e = new NoteResource
+                .NoteContentExceedsSizeLimitException(errorMessage);
+
+        ResponseEntity<String> response = noteResource.handleNoteContentExceedsSizeLimitException(e);
+        assertEquals(response.getStatusCode(), HttpStatus.BAD_REQUEST);
+        assertEquals(response.getBody(), errorMessage);
     }
 
     @Test
@@ -78,19 +88,44 @@ public class NoteResourceTest {
         when(noteService.updateNote(note)).thenReturn(note);
 
         ResponseEntity<Note> responseEntity = noteResource.updateNote(note);
-        assertNotNull(responseEntity);
         assertEquals(responseEntity.getStatusCode(), HttpStatus.OK);
-
-        Note responseNote = responseEntity.getBody();
-        assertNotNull(responseNote);
-        assertEquals(responseNote.getId(), note.getId());
-        assertEquals(responseNote.getContent(), note.getContent());
+        assertEquals(responseEntity.getBody().getId(), note.getId());
+        assertEquals(responseEntity.getBody().getContent(), note.getContent());
     }
 
     @Test
-    public void testDeleteNote() {
-        ResponseEntity<?> responseEntity = noteResource.deleteNote(1L);
-        assertNotNull(responseEntity);
-        assertEquals(responseEntity.getStatusCode(), HttpStatus.OK);
+    public void testDeleteNoteWithValidId() {
+        Long noteId = 1L;
+        Note note = new Note();
+        note.setId(noteId);
+        when(noteService.findAllNotes()).thenReturn(List.of(note));
+
+        ResponseEntity<?> response = noteResource.deleteNote(noteId);
+
+        assertEquals(response.getStatusCode(), HttpStatus.OK);
+    }
+
+    @Test
+    public void testDeleteNoteWithInvalidId() {
+        Long noteId = 2L;
+        Note note = new Note();
+        note.setId(1L);
+        when(noteService.findAllNotes()).thenReturn(List.of(note));
+
+        ResponseEntity<?> response = noteResource.deleteNote(noteId);
+
+        assertEquals(response.getStatusCode(), HttpStatus.BAD_REQUEST);
+        assertEquals(response.getBody(), "Note with this id doesn't exist");
+    }
+
+    @Test
+    public void testDeleteNoteWhenNoNotesExist() {
+        Long noteId = 1L;
+        when(noteService.findAllNotes()).thenReturn(new ArrayList<>());
+
+        ResponseEntity<?> response = noteResource.deleteNote(noteId);
+
+        assertEquals(response.getStatusCode(), HttpStatus.BAD_REQUEST);
+        assertEquals(response.getBody(), "Note with this id doesn't exist");
     }
 }
